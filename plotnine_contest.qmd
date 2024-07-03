@@ -1,0 +1,171 @@
+---
+title: "Plotnine Contest"
+format:
+  html:
+    toc: true
+    embed-resources: true
+    other-links:
+      - text: The Himalayan Database
+        href: https://www.himalayandatabase.com/
+      - text: Tidy Tuesday Project
+        href: https://github.com/rfordatascience/tidytuesday/blob/master/data/2020/2020-09-22/readme.md  
+---
+
+# Eight-thousanders in Nepal
+
+For my submission, I use data from [The Himalayan Database](https://www.himalayandatabase.com/). I found the csv in the [Tidy Tuesday Project](https://github.com/rfordatascience/tidytuesday/blob/master/data/2020/2020-09-22/readme.md). 
+
+# Data wrangling
+
+```{python}
+
+from plotnine import *
+import geopandas
+import geocoder
+import pandas as pd
+from siuba import *
+```
+
+## Filter the relevant mountains
+
+There are [14 eight-thousanders](https://en.wikipedia.org/wiki/Eight-thousander) in the world. Eight of them are (partially) in Nepal and their ascents are well-documented in The Himalayan Database. Those mountains will be the focus of my analysis and data visualization. 
+
+```{python}
+
+# Import the csv from the Tidy Tuesday project
+members = pd.read_csv(
+    "https://raw.githubusercontent.com/rfordatascience/tidytuesday/master/data/2020/2020-09-22/members.csv"
+)
+
+peaks = pd.read_csv(
+    "https://raw.githubusercontent.com/rfordatascience/tidytuesday/master/data/2020/2020-09-22/peaks.csv"
+)
+```
+
+```{python}
+
+# Filter for the eight-thousanders
+df01 = peaks >> filter(_.height_metres > 8000)
+
+# I want the ascents on the individual level (not on expedition-level)
+df02 = inner_join(df01, members, by=["peak_id", "peak_name"])
+```
+
+```{python}
+
+# I only want the main peaks of the eight-thousanders (not the subsidiary peaks)
+main_peaks = (
+    df02
+    >> count(_.peak_name)
+    >> filter(_.n > 1000)
+)
+```
+
+```{python}
+
+# I want to focus on the more recent years when there were coming more and more big commercial expeditions
+df03 = (
+    df02 
+    >> filter(_.peak_name.isin(main_peaks["peak_name"]))
+    >> filter(_.year >= 2009)
+)
+```
+
+```{python}
+
+# I am interested in the success differentiated by whether oxygen was used or not
+
+oxygen_use_sucess_01 = (
+    df03
+    >> count(_.peak_name, _.oxygen_used, _.success)
+    >> mutate(peak_name = _.peak_name.str.replace("I", ""))
+)
+```
+
+## Geocoding
+
+```{python}
+
+# I need the latitude and longitude of the mountains
+lat = []
+lng = []
+
+for peak in oxygen_use_sucess_01["peak_name"]:
+    latlng = geocoder.arcgis(peak).latlng
+    lat.append(latlng[0])
+    lng.append(latlng[1])
+
+oxygen_use_sucess_01["lat"] = lat
+oxygen_use_sucess_01["lng"] = lng
+```
+
+```{python}
+
+# Move some mountains a little bit on the map so that they do not overlap that much
+oxygen_use_sucess_02 = (
+    oxygen_use_sucess_01 
+    >> mutate(lng=case_when({
+        _.peak_name == "Makalu": _.lng + 0.15,
+        _.peak_name == "Lhotse": _.lng + 0.15,
+        _.peak_name == "Cho Oyu": _.lng - 0.15,
+        True: _.lng,
+    }))
+    >> rename(Oxygen = _.oxygen_used, Success = _.success)
+)
+```
+
+## Geopandas
+
+```{python}
+
+# Load the world shapefile data
+world = geopandas.read_file(
+    "https://github.com/geopandas/geopandas/raw/v0.9.0/geopandas/datasets/naturalearth_lowres/naturalearth_lowres.shp"
+)
+
+# Filter for Nepal
+nepal = world >> filter(_.name == "Nepal")
+```
+
+# Creating the plot
+
+```{python}
+
+p = (
+    ggplot(oxygen_use_sucess_02)
+    + geom_map(nepal, fill="#d0d0d0", size=0)
+    + geom_point(aes(x="lng", y="lat", size="n", color="peak_name"))
+    + facet_wrap(["Oxygen", "Success"], labeller="label_both")
+    + coord_fixed()
+    + theme_void()
+    + labs(
+        size="Number of climbers",
+        color="Mountain",
+        title="Success on > 8,000 m peaks in Nepal without bottled oxygen is rare",
+        subtitle="Everest has only been summited 57 times without bottled oxygen (and 5,903 times using bottled oxygen)",
+        caption="Data: The Himalayan Database\nYears: 2009 - 2019",
+    )
+    + theme(
+        plot_background=element_rect(fill="#EBF2FF"),
+        legend_position="bottom",
+        plot_title=element_text(ha="center", size=19),
+        plot_subtitle=element_text(ha="center"),
+    )
+    + scale_size_continuous(
+        range=[1, 20],
+        breaks=[50, 100, 1000, 3000, 5000],
+        labels=["50", "100", "1,000", "3,000", "5,000"],
+    )
+)
+```
+
+```{python}
+
+p.save("mathis_plotnine_contest.png", height = 8, width = 10, dpi=600)
+```
+
+# My submission
+
+The plot can be found in @fig-submission. For the best viewing experience, open it in an external tab.
+
+![Plotnine Contest Submission Mathis](mathis_plotnine_contest.png){#fig-submission}

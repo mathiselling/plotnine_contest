@@ -1,0 +1,6 @@
+plotnine
+geopandas
+geocoder
+pandas
+siuba
+jupyter
