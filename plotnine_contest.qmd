@@ -161,11 +161,11 @@ p = (
 
 ```{python}
 
-p.save("mathis_plotnine_contest.png", height = 8, width = 10, dpi=600)
+#p.save("mathis_plotnine_contest.png", height = 8, width = 10, dpi=600)
 ```
 
 # My submission
 
-The plot can be found in @fig-submission. For the best viewing experience, open it in an external tab.
+The plot can be found in @fig-submission. **For the best viewing experience, open it in an external tab.**
 
 ![Plotnine Contest Submission Mathis](mathis_plotnine_contest.png){#fig-submission}
